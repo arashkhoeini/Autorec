@@ -124,7 +124,7 @@ class AutoRec():
 
         Cost,Decoder = self.sess.run(
             [self.cost,self.Decoder],
-            feed_dict={self.input_R: self.test_R,
+            feed_dict={self.input_R: self.train_R,
                        self.input_mask_R: self.test_mask_R})
 
 

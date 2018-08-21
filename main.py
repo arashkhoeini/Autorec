@@ -20,9 +20,7 @@ parser.add_argument('--decay_epoch_step', type=int, default=50,help="decay the l
 
 parser.add_argument('--random_seed', type=int, default=1000)
 parser.add_argument('--display_step', type=int, default=1)
-
 parser.add_argument('--data_set', type=str, default='100k') #another option is '1m'
-
 parser.add_argument('--upl', type=int, default=10)
 parser.add_argument('--repeat_number' , type=int, default=5)
 
