@@ -1,8 +1,12 @@
 import numpy as np
 
-def read_rating(path, num_users, num_items,num_total_ratings, a, b, train_ratio):
-    fp = open(path + "ratings.dat")
-
+def read_rating(path, num_users,num_items, a, b, upl):
+    if 'ml-100k' in path:
+        fp = open(path + "u.data")
+        splitter = '\t'
+    else:
+        fp = open(path + "ratings.dat")
+        splitter = '::'
     user_train_set = set()
     user_test_set = set()
     item_train_set = set()
@@ -18,16 +22,15 @@ def read_rating(path, num_users, num_items,num_total_ratings, a, b, train_ratio)
     train_mask_R = np.zeros((num_users, num_items))
     test_mask_R = np.zeros((num_users, num_items))
 
-    random_perm_idx = np.random.permutation(num_total_ratings)
-    train_idx = random_perm_idx[0:int(num_total_ratings*train_ratio)]
-    test_idx = random_perm_idx[int(num_total_ratings*train_ratio):]
+    lines = fp.readlines()
+    train_idx , test_idx = _train_test_upl_split(lines, num_users, upl, splitter )
 
     num_train_ratings = len(train_idx)
     num_test_ratings = len(test_idx)
 
-    lines = fp.readlines()
+
     for line in lines:
-        user,item,rating,_ = line.split("::")
+        user,item,rating,_ = line.split(splitter)
         user_idx = int(user) - 1
         item_idx = int(item) - 1
         R[user_idx,item_idx] = int(rating)
@@ -37,7 +40,7 @@ def read_rating(path, num_users, num_items,num_total_ratings, a, b, train_ratio)
     ''' Train '''
     for itr in train_idx:
         line = lines[itr]
-        user,item,rating,_ = line.split("::")
+        user,item,rating,_ = line.split(splitter)
         user_idx = int(user) - 1
         item_idx = int(item) - 1
         train_R[user_idx,item_idx] = int(rating)
@@ -49,7 +52,7 @@ def read_rating(path, num_users, num_items,num_total_ratings, a, b, train_ratio)
     ''' Test '''
     for itr in test_idx:
         line = lines[itr]
-        user, item, rating, _ = line.split("::")
+        user, item, rating, _ = line.split(splitter)
         user_idx = int(user) - 1
         item_idx = int(item) - 1
         test_R[user_idx, item_idx] = int(rating)
@@ -62,4 +65,26 @@ def read_rating(path, num_users, num_items,num_total_ratings, a, b, train_ratio)
 user_train_set,item_train_set,user_test_set,item_test_set
 
 
+def _train_test_upl_split(data, num_users, UPL, splitter):
+    train_indices = []
+    test_indices = []
 
+    user_rates_count = np.zeros(num_users)
+    for row in data:
+        user,item,rating,_ = row.split(splitter)
+        user_rates_count[int(user)-1] +=1
+    valid_users = np.where(user_rates_count  > UPL + 10)[0]
+
+    user_included_movies = np.zeros(num_users)
+    idx = 0
+    for row in data:
+        user,item,rating,_ = row.split(splitter)
+        if int(user)-1 in valid_users:
+            if user_included_movies[int(user)-1] < UPL:
+                train_indices.append(idx)
+                user_included_movies[int(user)-1] += 1
+            else:
+                test_indices.append(idx)
+        idx +=1
+
+    return train_indices, test_indices

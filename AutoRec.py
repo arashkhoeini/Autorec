@@ -8,8 +8,7 @@ class AutoRec():
     def __init__(self,sess,args,
                       num_users,num_items,
                       R, mask_R, C, train_R, train_mask_R, test_R, test_mask_R,num_train_ratings,num_test_ratings,
-                      user_train_set, item_train_set, user_test_set, item_test_set,
-                      result_path):
+                      user_train_set, item_train_set, user_test_set, item_test_set):
 
         self.sess = sess
         self.args = args
@@ -41,7 +40,7 @@ class AutoRec():
         self.optimizer_method = args.optimizer_method
         self.display_step = args.display_step
         self.random_seed = args.random_seed
-
+        self.upl = args.upl
         self.global_step = tf.Variable(0, trainable=False)
         self.decay_epoch_step = args.decay_epoch_step
         self.decay_step = self.decay_epoch_step * self.num_batch
@@ -49,11 +48,8 @@ class AutoRec():
                                                    self.decay_step, 0.96, staircase=True)
         self.lambda_value = args.lambda_value
 
-        self.train_cost_list = []
-        self.test_cost_list = []
-        self.test_rmse_list = []
+        self.test_ndcg_list = []
 
-        self.result_path = result_path
         self.grad_clip = args.grad_clip
 
     def run(self):
@@ -62,8 +58,8 @@ class AutoRec():
         self.sess.run(init)
         for epoch_itr in range(self.train_epoch):
             self.train_model(epoch_itr)
-            self.test_model(epoch_itr)
-        self.make_records()
+
+
 
     def prepare_model(self):
         self.input_R = tf.placeholder(dtype=tf.float32, shape=[None, self.num_items], name="input_R")
@@ -119,77 +115,48 @@ class AutoRec():
                            self.input_mask_R: self.train_mask_R[batch_set_idx, :]})
 
             batch_cost = batch_cost + Cost
-        self.train_cost_list.append(batch_cost)
 
         if (itr+1) % self.display_step == 0:
             print ("Training //", "Epoch %d //" % (itr), " Total cost = {:.2f}".format(batch_cost),
                "Elapsed time : %d sec" % (time.time() - start_time))
 
-    def test_model(self,itr):
-        start_time = time.time()
+    def test_model(self, n):
+
         Cost,Decoder = self.sess.run(
             [self.cost,self.Decoder],
             feed_dict={self.input_R: self.test_R,
                        self.input_mask_R: self.test_mask_R})
 
-        self.test_cost_list.append(Cost)
 
-        if (itr+1) % self.display_step == 0:
-            Estimated_R = Decoder.clip(min=1, max=5)
-            unseen_user_test_list = list(self.user_test_set - self.user_train_set)
-            unseen_item_test_list = list(self.item_test_set - self.item_train_set)
+        NDCGs = []
+        for user in range(self.num_users):
 
-            for user in unseen_user_test_list:
-                for item in unseen_item_test_list:
-                    if self.test_mask_R[user,item] == 1: # exist in test set
-                        Estimated_R[user,item] = 3
+            estimated_r = np.multiply(Decoder[user,:], self.test_mask_R[user,:])
+            real_rates = np.multiply(self.test_R[user,:], self.test_mask_R[user,:])
 
-            pre_numerator = np.multiply((Estimated_R - self.test_R), self.test_mask_R)
-            numerator = np.sum(np.square(pre_numerator))
-            denominator = self.num_test_ratings
-            RMSE = np.sqrt(numerator / float(denominator))
+            estimated_top_n_indices = np.flip(estimated_r.argsort()[-n:], 0)
+            real_top_n_indices = np.flip(real_rates.argsort()[-n:], 0)
 
-            self.test_rmse_list.append(RMSE)
+            top_ranked_rates = real_rates[estimated_top_n_indices]
+            top_real_rates = real_rates[real_top_n_indices]
 
-            print ("Testing //", "Epoch %d //" % (itr), " Total cost = {:.2f}".format(Cost), " RMSE = {:.5f}".format(RMSE),
-                   "Elapsed time : %d sec" % (time.time() - start_time))
-            print ("=" * 100)
+            p_u = self._dcg(top_ranked_rates)
+            beta_u = self._dcg(top_real_rates)
 
-    def make_records(self):
-        if not os.path.exists(self.result_path):
-            os.makedirs(self.result_path)
+            ndcg = p_u/beta_u
+            if ndcg > 0:
+                NDCGs.append(ndcg)
+        NDCG = sum(NDCGs)/len(NDCGs)
+        self.test_ndcg_list.append(NDCG)
 
-        basic_info = self.result_path + "basic_info.txt"
-        train_record = self.result_path + "train_record.txt"
-        test_record = self.result_path + "test_record.txt"
+        return NDCG
 
-        with open (train_record,'w') as f:
-            f.write(str("Cost:"))
-            f.write('\t')
-            for itr in range(len(self.train_cost_list)):
-                f.write(str(self.train_cost_list[itr]))
-                f.write('\t')
-            f.write('\n')
-
-        with open (test_record,'w') as g:
-            g.write(str("Cost:"))
-            g.write('\t')
-            for itr in range(len(self.test_cost_list)):
-                g.write(str(self.test_cost_list[itr]))
-                g.write('\t')
-            g.write('\n')
-
-            g.write(str("RMSE:"))
-            for itr in range(len(self.test_rmse_list)):
-                g.write(str(self.test_rmse_list[itr]))
-                g.write('\t')
-            g.write('\n')
-
-        with open(basic_info,'w') as h:
-            h.write(str(self.args))
 
     def l2_norm(self,tensor):
         return tf.sqrt(tf.reduce_sum(tf.square(tensor)))
 
-
-
+    def _dcg(self, l):
+        dcg = 0
+        for idx in range(len(l)):
+            dcg += (2**l[idx] - 1) / (math.log( (idx+2) ,2) )
+        return dcg
