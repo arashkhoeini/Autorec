@@ -1,9 +1,9 @@
-#Autorec : Autoencoder meets Collaborative Filtering
+# Autorec : Autoencoder meets Collaborative Filtering
 (Sedhain, S., Menon, A. K., Sanner, S., & Xie, L. (2015, May). Autorec: Autoencoders meet collaborative filtering. In Proceedings of the 24th International Conference on World Wide Web (pp. 111-112). ACM.)
 
-##Python Tensorflow Implementation
+## Python Tensorflow Implementation
 
-###This is a forked version of [this repository](https://github.com/gtshs2/Autorec).
+### This is a forked version of [this repository](https://github.com/gtshs2/Autorec).
 
 This version accepts UPL size in arguments as --upl and separates test and train
 data based on profile sizes. For example for UPL=10 it keeps 10 items of each
