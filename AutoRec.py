@@ -142,8 +142,10 @@ class AutoRec():
 
             p_u = self._dcg(top_ranked_rates)
             beta_u = self._dcg(top_real_rates)
-
-            ndcg = p_u/beta_u
+            
+            ndcg = 0
+            if(beta_u > 0):
+                ndcg = p_u/beta_u
             if ndcg > 0:
                 NDCGs.append(ndcg)
         NDCG = sum(NDCGs)/len(NDCGs)
